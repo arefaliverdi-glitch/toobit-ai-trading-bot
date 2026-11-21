@@ -38,6 +38,16 @@ def send_message(chat_id, text):
 
 
 def get_candles(symbol, interval):
+
+    durations = {
+        "15m": 15 * 60 * 1000,
+        "1h": 60 * 60 * 1000
+    }
+
+    now = int(time.time() * 1000)
+
+    duration = durations[interval]
+
     url = f"{BASE_URL}/quote/v1/klines"
 
     response = requests.get(
@@ -45,12 +55,15 @@ def get_candles(symbol, interval):
         params={
             "symbol": symbol,
             "interval": interval,
+            "startTime": now - 100 * duration,
+            "endTime": now,
             "limit": 100
         },
-        timeout=15
+        timeout=20
     )
 
     response.raise_for_status()
+
     data = response.json()
 
     return [
