@@ -20,8 +20,8 @@ TIMEFRAMES = {
     "4h": 4 * 60 * 60 * 1000
 }
 
-TOP_SYMBOLS = 40
-MIN_SCORE = 65
+TOP_SYMBOLS = 100
+MIN_SCORE = 70
 SCAN_INTERVAL = 300
 KLINE_LIMIT = 250
 SYMBOL_REFRESH = 1800
@@ -918,7 +918,7 @@ def scan_market(target_chat=None):
 
             send_message(
                 target_chat,
-                "در این اسکن سیگنالی با امتیاز ۵۰ یا بیشتر پیدا نشد."
+                "در این اسکن سیگنالی با امتیاز 65 یا بیشتر پیدا نشد."
             )
 
 
@@ -968,7 +968,7 @@ def handle_command(chat_id, text):
 
         send_message(
             chat_id,
-            "🔍 اسکن ۳۰ نماد برتر شروع شد..."
+            "🔍 اسکن 100 نماد برتر شروع شد..."
         )
 
         scan_market(target_chat=chat_id)
