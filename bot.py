@@ -939,7 +939,7 @@ def handle_command(chat_id, text):
             """
 🤖 <b>Toobit AI Scanner فعال شد</b>
 
-✅ بررسی ۳۰ نماد برتر
+✅ بررسی 100 نماد برتر
 ✅ تایم‌فریم 5m
 ✅ تایم‌فریم 15m
 ✅ تایم‌فریم 1h
@@ -950,7 +950,7 @@ def handle_command(chat_id, text):
 ✅ Liquidity Sweep
 ✅ Break of Structure
 
-⭐ حداقل امتیاز: 50
+⭐ حداقل امتیاز: 70
 
 ⏱ اسکن خودکار هر ۵ دقیقه
 
