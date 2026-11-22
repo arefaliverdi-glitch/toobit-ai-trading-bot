@@ -1,49 +1,60 @@
 import os
 import time
-import requests
 import logging
+import requests
 from datetime import datetime, timezone
 
-# ================= CONFIG =================
+# ==========================================
+# CONFIG
+# ==========================================
 
 TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 
 BASE_URL = "https://api.toobit.com"
 TG_URL = f"https://api.telegram.org/bot{TOKEN}"
 
-SYMBOLS = [
-    "BTC-SWAP-USDT",
-    "ETH-SWAP-USDT",
-    "SOL-SWAP-USDT",
-    "XRP-SWAP-USDT"
-]
+TIMEFRAMES = {
+    "5m": 5 * 60 * 1000,
+    "15m": 15 * 60 * 1000,
+    "1h": 60 * 60 * 1000,
+    "4h": 4 * 60 * 60 * 1000
+}
 
-TIMEFRAMES = ["5m", "15m", "1h", "4h"]
-
+TOP_SYMBOLS = 30
 MIN_SCORE = 50
 SCAN_INTERVAL = 300
+KLINE_LIMIT = 250
+SYMBOL_REFRESH = 1800
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(message)s"
+)
 
 session = requests.Session()
 
 subscribers = set()
 last_signals = {}
 
-# ================= HTTP =================
+symbols_cache = []
+last_symbol_refresh = 0
+
+# ==========================================
+# HTTP
+# ==========================================
 
 def api_get(url, params=None):
 
     try:
-        r = session.get(
+        response = session.get(
             url,
             params=params,
-            timeout=15
+            timeout=20
         )
 
-        r.raise_for_status()
+        response.raise_for_status()
 
-        return r.json()
+        return response.json()
 
     except Exception as e:
 
@@ -56,13 +67,15 @@ def telegram(method, data=None):
 
     try:
 
-        r = session.post(
+        response = session.post(
             f"{TG_URL}/{method}",
             json=data or {},
-            timeout=20
+            timeout=15
         )
 
-        return r.json()
+        response.raise_for_status()
+
+        return response.json()
 
     except Exception as e:
 
@@ -71,33 +84,144 @@ def telegram(method, data=None):
         return {}
 
 
-def send_message(chat_id, text):
+def send_message(chat_id, message):
 
     telegram(
         "sendMessage",
         {
             "chat_id": chat_id,
-            "text": text,
+            "text": message,
             "parse_mode": "HTML",
             "disable_web_page_preview": True
         }
     )
 
 
-# ================= MARKET DATA =================
+# ==========================================
+# TOP 30 FUTURES SYMBOLS
+# ==========================================
 
-def get_klines(symbol, interval, limit=300):
+def get_top_symbols():
+
+    global symbols_cache
+    global last_symbol_refresh
+
+    now = time.time()
+
+    if (
+        symbols_cache
+        and now - last_symbol_refresh < SYMBOL_REFRESH
+    ):
+
+        return symbols_cache
+
+    logging.info("Refreshing top 30 symbols...")
+
+    exchange = api_get(
+        f"{BASE_URL}/api/v1/exchangeInfo"
+    )
+
+    tickers = api_get(
+        f"{BASE_URL}/quote/v1/contract/ticker/24hr"
+    )
+
+    if not isinstance(exchange, dict):
+        return symbols_cache
+
+    if not isinstance(tickers, list):
+        return symbols_cache
+
+    contracts = exchange.get("contracts", [])
+
+    if not isinstance(contracts, list):
+        return symbols_cache
+
+    tradable = set()
+
+    for contract in contracts:
+
+        symbol = contract.get("symbol")
+        status = contract.get("status")
+
+        if (
+            symbol
+            and symbol.endswith("-USDT")
+            and status == "TRADING"
+        ):
+
+            tradable.add(symbol)
+
+    ranked = []
+
+    for ticker in tickers:
+
+        symbol = ticker.get("s")
+
+        if symbol not in tradable:
+            continue
+
+        try:
+
+            volume = float(ticker.get("qv", 0))
+
+            if volume > 0:
+
+                ranked.append(
+                    (symbol, volume)
+                )
+
+        except (ValueError, TypeError):
+            continue
+
+    ranked.sort(
+        key=lambda x: x[1],
+        reverse=True
+    )
+
+    new_symbols = [
+        item[0]
+        for item in ranked[:TOP_SYMBOLS]
+    ]
+
+    if new_symbols:
+
+        symbols_cache = new_symbols
+        last_symbol_refresh = now
+
+    logging.info(
+        f"Selected {len(symbols_cache)} symbols"
+    )
+
+    return symbols_cache
+
+
+# ==========================================
+# KLINES
+# ==========================================
+
+def get_klines(symbol, interval):
+
+    interval_ms = TIMEFRAMES[interval]
+
+    now_ms = int(time.time() * 1000)
+
+    start_time = (
+        now_ms -
+        (KLINE_LIMIT + 5) * interval_ms
+    )
 
     data = api_get(
         f"{BASE_URL}/quote/v1/klines",
         {
             "symbol": symbol,
             "interval": interval,
-            "limit": limit
+            "startTime": start_time,
+            "endTime": now_ms,
+            "limit": KLINE_LIMIT
         }
     )
 
-    if not isinstance(data, list) or len(data) < 100:
+    if not isinstance(data, list):
         return []
 
     candles = []
@@ -107,42 +231,42 @@ def get_klines(symbol, interval, limit=300):
         try:
 
             candles.append({
+
                 "time": int(row[0]),
+
                 "open": float(row[1]),
+
                 "high": float(row[2]),
+
                 "low": float(row[3]),
+
                 "close": float(row[4]),
+
                 "volume": float(row[5])
+
             })
 
         except (ValueError, TypeError, IndexError):
             continue
 
+    candles.sort(
+        key=lambda x: x["time"]
+    )
+
     # حذف کندل در حال تشکیل
-    if len(candles) > 1:
-        candles = candles[:-1]
+    now_ms = int(time.time() * 1000)
+
+    candles = [
+        c for c in candles
+        if c["time"] + interval_ms <= now_ms
+    ]
 
     return candles
 
 
-def get_market_price(symbol):
-
-    data = api_get(
-        f"{BASE_URL}/quote/v1/contract/ticker/price",
-        {"symbol": symbol}
-    )
-
-    if isinstance(data, list) and data:
-
-        try:
-            return float(data[0]["p"])
-        except Exception:
-            pass
-
-    return None
-
-
-# ================= INDICATORS =================
+# ==========================================
+# INDICATORS
+# ==========================================
 
 def ema(values, period):
 
@@ -156,8 +280,8 @@ def ema(values, period):
     for value in values[period:]:
 
         result = (
-            value * alpha +
-            result * (1 - alpha)
+            alpha * value
+            + (1 - alpha) * result
         )
 
     return result
@@ -168,17 +292,23 @@ def calculate_rsi(values, period=14):
     if len(values) < period + 1:
         return None
 
-    gains = []
-    losses = []
+    changes = [
+        values[i] - values[i - 1]
+        for i in range(1, len(values))
+    ]
 
-    for i in range(1, len(values)):
+    gains = [
+        max(x, 0)
+        for x in changes
+    ]
 
-        change = values[i] - values[i - 1]
-
-        gains.append(max(change, 0))
-        losses.append(max(-change, 0))
+    losses = [
+        max(-x, 0)
+        for x in changes
+    ]
 
     avg_gain = sum(gains[-period:]) / period
+
     avg_loss = sum(losses[-period:]) / period
 
     if avg_loss == 0:
@@ -202,9 +332,17 @@ def calculate_atr(candles, period=14):
         previous = candles[i - 1]
 
         tr = max(
+
             current["high"] - current["low"],
-            abs(current["high"] - previous["close"]),
-            abs(current["low"] - previous["close"])
+
+            abs(
+                current["high"] - previous["close"]
+            ),
+
+            abs(
+                current["low"] - previous["close"]
+            )
+
         )
 
         trs.append(tr)
@@ -212,74 +350,84 @@ def calculate_atr(candles, period=14):
     return sum(trs[-period:]) / period
 
 
-# ================= PRICE ACTION =================
+# ==========================================
+# PRICE ACTION
+# ==========================================
 
 def candle_patterns(candles):
 
-    c = candles[-1]
-    p = candles[-2]
+    current = candles[-1]
+    previous = candles[-2]
 
-    body = abs(c["close"] - c["open"])
+    body = abs(
+        current["close"] - current["open"]
+    )
 
     candle_range = max(
-        c["high"] - c["low"],
-        0.00000001
+        current["high"] - current["low"],
+        1e-12
     )
 
-    upper_wick = c["high"] - max(
-        c["open"], c["close"]
+    upper_wick = (
+        current["high"]
+        - max(current["open"], current["close"])
     )
 
-    lower_wick = min(
-        c["open"], c["close"]
-    ) - c["low"]
+    lower_wick = (
+        min(current["open"], current["close"])
+        - current["low"]
+    )
 
     patterns = []
 
-    # Bullish Engulfing
+    # Bullish engulfing
 
     if (
-        p["close"] < p["open"]
-        and c["close"] > c["open"]
-        and c["close"] > p["open"]
-        and c["open"] < p["close"]
+        previous["close"] < previous["open"]
+        and current["close"] > current["open"]
+        and current["close"] > previous["open"]
+        and current["open"] < previous["close"]
     ):
 
         patterns.append("BULLISH_ENGULFING")
 
-    # Bearish Engulfing
+    # Bearish engulfing
 
     if (
-        p["close"] > p["open"]
-        and c["close"] < c["open"]
-        and c["close"] < p["open"]
-        and c["open"] > p["close"]
+        previous["close"] > previous["open"]
+        and current["close"] < current["open"]
+        and current["close"] < previous["open"]
+        and current["open"] > previous["close"]
     ):
 
         patterns.append("BEARISH_ENGULFING")
 
-    # Bullish Pin Bar
+    # Bullish pin bar
 
     if (
-        lower_wick > body * 2
+        lower_wick > max(body, 1e-12) * 2
         and lower_wick > candle_range * 0.55
-        and c["close"] > c["open"]
+        and current["close"] > current["open"]
     ):
 
         patterns.append("BULLISH_PINBAR")
 
-    # Bearish Pin Bar
+    # Bearish pin bar
 
     if (
-        upper_wick > body * 2
+        upper_wick > max(body, 1e-12) * 2
         and upper_wick > candle_range * 0.55
-        and c["close"] < c["open"]
+        and current["close"] < current["open"]
     ):
 
         patterns.append("BEARISH_PINBAR")
 
     return patterns
 
+
+# ==========================================
+# LIQUIDITY SWEEP
+# ==========================================
 
 def liquidity_analysis(candles):
 
@@ -298,16 +446,12 @@ def liquidity_analysis(candles):
 
     current = candles[-1]
 
-    # Sweep of lows followed by recovery
-
     if (
         current["low"] < previous_low
         and current["close"] > previous_low
     ):
 
         return "BULLISH_SWEEP"
-
-    # Sweep of highs followed by rejection
 
     if (
         current["high"] > previous_high
@@ -318,6 +462,10 @@ def liquidity_analysis(candles):
 
     return None
 
+
+# ==========================================
+# MARKET STRUCTURE
+# ==========================================
 
 def structure_analysis(candles):
 
@@ -345,18 +493,22 @@ def structure_analysis(candles):
     return None
 
 
-# ================= TIMEFRAME ANALYSIS =================
+# ==========================================
+# TIMEFRAME ANALYSIS
+# ==========================================
 
 def analyze_timeframe(candles):
 
-    if len(candles) < 210:
+    if len(candles) < 205:
         return None
 
-    closes = [x["close"] for x in candles]
+    closes = [
+        x["close"] for x in candles
+    ]
 
-    volumes = [x["volume"] for x in candles]
-
-    price = closes[-1]
+    volumes = [
+        x["volume"] for x in candles
+    ]
 
     ema20 = ema(closes, 20)
     ema50 = ema(closes, 50)
@@ -366,21 +518,20 @@ def analyze_timeframe(candles):
 
     atr = calculate_atr(candles)
 
-    if None in (ema20, ema50, ema200, rsi, atr):
+    if any(
+        x is None
+        for x in [ema20, ema50, ema200, rsi, atr]
+    ):
         return None
 
-    avg_volume = sum(volumes[-21:-1]) / 20
+    avg_volume = (
+        sum(volumes[-21:-1]) / 20
+    )
 
     volume_ratio = (
         volumes[-1] / avg_volume
         if avg_volume > 0 else 0
     )
-
-    patterns = candle_patterns(candles)
-
-    liquidity = liquidity_analysis(candles)
-
-    structure = structure_analysis(candles)
 
     trend = "NEUTRAL"
 
@@ -391,134 +542,151 @@ def analyze_timeframe(candles):
         trend = "BEARISH"
 
     return {
-        "price": price,
+
+        "price": closes[-1],
+
+        "candle_time": candles[-1]["time"],
+
         "ema20": ema20,
+
         "ema50": ema50,
+
         "ema200": ema200,
+
         "rsi": rsi,
+
         "atr": atr,
+
         "volume_ratio": volume_ratio,
-        "patterns": patterns,
-        "liquidity": liquidity,
-        "structure": structure,
-        "trend": trend
+
+        "trend": trend,
+
+        "patterns": candle_patterns(candles),
+
+        "liquidity": liquidity_analysis(candles),
+
+        "structure": structure_analysis(candles)
+
     }
 
 
-# ================= SCORING ENGINE =================
+# ==========================================
+# SCORING
+# ==========================================
 
 def calculate_score(results):
 
     long_score = 0
     short_score = 0
 
-    reasons_long = []
-    reasons_short = []
-
-    # Higher timeframe trend
+    # 4H and 1H trend
 
     for tf in ["4h", "1h"]:
 
-        data = results.get(tf)
-
-        if not data:
-            continue
+        data = results[tf]
 
         if data["trend"] == "BULLISH":
-
-            long_score += 15
-            reasons_long.append(f"{tf}: صعودی")
-
-        elif data["trend"] == "BEARISH":
-
-            short_score += 15
-            reasons_short.append(f"{tf}: نزولی")
-
-    # Medium timeframe
-
-    data = results.get("15m")
-
-    if data:
-
-        if data["trend"] == "BULLISH":
-            long_score += 10
-
-        elif data["trend"] == "BEARISH":
-            short_score += 10
-
-    # Entry timeframe
-
-    data = results.get("5m")
-
-    if data:
-
-        if data["trend"] == "BULLISH":
-            long_score += 8
-
-        elif data["trend"] == "BEARISH":
-            short_score += 8
-
-        rsi = data["rsi"]
-
-        if 45 <= rsi <= 65:
-            long_score += 5
-
-        if 35 <= rsi <= 55:
-            short_score += 5
-
-        if rsi > 75:
-            long_score -= 8
-
-        if rsi < 25:
-            short_score -= 8
-
-        if data["volume_ratio"] >= 1.5:
-
-            if data["price"] > data["ema20"]:
-                long_score += 8
-
-            elif data["price"] < data["ema20"]:
-                short_score += 8
-
-        if "BULLISH_ENGULFING" in data["patterns"]:
-            long_score += 12
-
-        if "BEARISH_ENGULFING" in data["patterns"]:
-            short_score += 12
-
-        if "BULLISH_PINBAR" in data["patterns"]:
-            long_score += 8
-
-        if "BEARISH_PINBAR" in data["patterns"]:
-            short_score += 8
-
-        if data["liquidity"] == "BULLISH_SWEEP":
             long_score += 15
 
-        if data["liquidity"] == "BEARISH_SWEEP":
+        elif data["trend"] == "BEARISH":
             short_score += 15
 
-        if data["structure"] == "BULLISH_BOS":
-            long_score += 12
+    # 15m trend
 
-        if data["structure"] == "BEARISH_BOS":
-            short_score += 12
+    if results["15m"]["trend"] == "BULLISH":
+        long_score += 10
 
-    long_score = max(0, min(100, long_score))
-    short_score = max(0, min(100, short_score))
+    elif results["15m"]["trend"] == "BEARISH":
+        short_score += 10
 
-    if long_score >= MIN_SCORE and long_score > short_score:
+    # 5m entry analysis
+
+    data = results["5m"]
+
+    if data["trend"] == "BULLISH":
+        long_score += 8
+
+    elif data["trend"] == "BEARISH":
+        short_score += 8
+
+    rsi = data["rsi"]
+
+    if 45 <= rsi <= 65:
+        long_score += 5
+
+    if 35 <= rsi <= 55:
+        short_score += 5
+
+    if rsi > 75:
+        long_score -= 8
+
+    if rsi < 25:
+        short_score -= 8
+
+    if data["volume_ratio"] >= 1.5:
+
+        if data["price"] > data["ema20"]:
+            long_score += 8
+
+        elif data["price"] < data["ema20"]:
+            short_score += 8
+
+    patterns = data["patterns"]
+
+    if "BULLISH_ENGULFING" in patterns:
+        long_score += 12
+
+    if "BEARISH_ENGULFING" in patterns:
+        short_score += 12
+
+    if "BULLISH_PINBAR" in patterns:
+        long_score += 8
+
+    if "BEARISH_PINBAR" in patterns:
+        short_score += 8
+
+    if data["liquidity"] == "BULLISH_SWEEP":
+        long_score += 15
+
+    if data["liquidity"] == "BEARISH_SWEEP":
+        short_score += 15
+
+    if data["structure"] == "BULLISH_BOS":
+        long_score += 12
+
+    if data["structure"] == "BEARISH_BOS":
+        short_score += 12
+
+    long_score = max(
+        0, min(100, long_score)
+    )
+
+    short_score = max(
+        0, min(100, short_score)
+    )
+
+    if (
+        long_score >= MIN_SCORE
+        and long_score > short_score
+    ):
 
         return "LONG", long_score
 
-    if short_score >= MIN_SCORE and short_score > long_score:
+    if (
+        short_score >= MIN_SCORE
+        and short_score > long_score
+    ):
 
         return "SHORT", short_score
 
-    return None, max(long_score, short_score)
+    return None, max(
+        long_score, short_score
+    )
 
 
-# ================= SIGNAL GENERATOR =================
+# ==========================================
+# SIGNAL GENERATOR
+# ==========================================
 
 def analyze_symbol(symbol):
 
@@ -531,23 +699,25 @@ def analyze_symbol(symbol):
         if not candles:
             return None
 
-        analysis = analyze_timeframe(candles)
+        data = analyze_timeframe(candles)
 
-        if not analysis:
+        if not data:
             return None
 
-        results[tf] = analysis
+        results[tf] = data
 
     direction, score = calculate_score(results)
 
-    if not direction:
+    if direction is None:
         return None
 
     data = results["5m"]
 
     entry = data["price"]
-
     atr = data["atr"]
+
+    if atr <= 0:
+        return None
 
     if direction == "LONG":
 
@@ -566,157 +736,223 @@ def analyze_symbol(symbol):
         tp3 = entry - atr * 4
 
     return {
+
         "symbol": symbol,
+
         "direction": direction,
+
         "score": score,
+
         "entry": entry,
+
         "sl": sl,
+
         "tp1": tp1,
+
         "tp2": tp2,
+
         "tp3": tp3,
-        "time": datetime.now(
-            timezone.utc
-        ).strftime("%Y-%m-%d %H:%M UTC"),
+
+        "candle_time": data["candle_time"],
+
         "analysis": results
+
     }
 
 
-# ================= SIGNAL MESSAGE =================
+# ==========================================
+# SIGNAL MESSAGE
+# ==========================================
 
 def format_signal(signal):
 
-    direction = signal["direction"]
+    emoji = (
+        "🟢"
+        if signal["direction"] == "LONG"
+        else "🔴"
+    )
 
-    emoji = "🟢" if direction == "LONG" else "🔴"
-
-    result = f"""
+    message = f"""
 {emoji} <b>TOOBIT FUTURES SIGNAL</b>
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━
 
 💎 <b>Symbol:</b> {signal['symbol']}
 
-📊 <b>Direction:</b> {direction}
+📊 <b>Direction:</b> {signal['direction']}
 
-⭐ <b>Analysis Score:</b> {signal['score']}/100
+⭐ <b>Score:</b> {signal['score']}/100
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━
 
 🎯 <b>Entry:</b> {signal['entry']:.8g}
 
 🛑 <b>Stop Loss:</b> {signal['sl']:.8g}
 
-🥇 <b>Take Profit 1:</b> {signal['tp1']:.8g}
+🥇 <b>TP1:</b> {signal['tp1']:.8g}
 
-🥈 <b>Take Profit 2:</b> {signal['tp2']:.8g}
+🥈 <b>TP2:</b> {signal['tp2']:.8g}
 
-🥉 <b>Take Profit 3:</b> {signal['tp3']:.8g}
+🥉 <b>TP3:</b> {signal['tp3']:.8g}
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━
 
-📈 <b>Multi-Timeframe Analysis</b>
-
+📈 <b>TIMEFRAME ANALYSIS</b>
 """
 
     for tf, data in signal["analysis"].items():
 
-        result += (
-            f"\n<b>{tf}</b>"
-            f"\nTrend: {data['trend']}"
-            f"\nRSI: {data['rsi']:.1f}"
-            f"\nVolume: {data['volume_ratio']:.2f}x"
-            f"\n"
-        )
+        message += f"""
 
-    result += f"""
-━━━━━━━━━━━━━━━━━━
+<b>{tf}</b>
 
-🕒 {signal['time']}
+Trend: {data['trend']}
 
-⚠️ امتیاز، احتمال برد نیست.
-قیمت ورود و سطوح باید پیش از معامله
-با قیمت زنده و شرایط بازار بررسی شوند.
+RSI: {data['rsi']:.1f}
 
-🤖 Automated Market Scanner
+Volume: {data['volume_ratio']:.2f}x
+
+Liquidity: {data['liquidity'] or 'None'}
+
+Structure: {data['structure'] or 'None'}
+
+Patterns: {', '.join(data['patterns']) or 'None'}
 """
 
-    return result
+    message += """
+
+━━━━━━━━━━━━━━━━
+
+⚠️ امتیاز، احتمال برد نیست.
+سطوح قیمتی تخمینی هستند.
+قبل از معامله، قیمت زنده، کارمزد،
+اسپرد و اسلیپیج را بررسی کن.
+
+🤖 Toobit Market Scanner
+"""
+
+    return message
 
 
-# ================= SCANNER =================
+# ==========================================
+# MARKET SCAN
+# ==========================================
 
-def scan_market():
+def scan_market(target_chat=None):
 
-    logging.info("Starting market scan...")
+    logging.info("Market scan started")
 
-    for symbol in SYMBOLS:
+    symbols = get_top_symbols()
+
+    if not symbols:
+
+        logging.error("No symbols available")
+
+        if target_chat:
+            send_message(
+                target_chat,
+                "خطا در دریافت فهرست نمادهای Toobit."
+            )
+
+        return
+
+    found = 0
+
+    for index, symbol in enumerate(symbols, 1):
 
         try:
+
+            logging.info(
+                f"Scanning {index}/{len(symbols)}: {symbol}"
+            )
 
             signal = analyze_symbol(symbol)
 
             if not signal:
                 continue
 
+            found += 1
+
+            # سیگنال مربوط به آخرین کندل 5m
             key = (
                 symbol,
                 signal["direction"]
             )
 
-            old = last_signals.get(key)
+            candle_time = signal["candle_time"]
 
-            # جلوگیری از ارسال تکراری
-            if old == signal["score"]:
-                continue
+            if target_chat is not None:
 
-            last_signals[key] = signal["score"]
+                send_message(
+                    target_chat,
+                    format_signal(signal)
+                )
 
-            message = format_signal(signal)
+            else:
 
-            for chat_id in list(subscribers):
+                if last_signals.get(key) == candle_time:
+                    continue
 
-                send_message(chat_id, message)
+                last_signals[key] = candle_time
 
-            logging.info(
-                f"{symbol}: {signal['direction']} "
-                f"Score={signal['score']}"
-            )
+                for chat_id in list(subscribers):
+
+                    send_message(
+                        chat_id,
+                        format_signal(signal)
+                    )
 
         except Exception as e:
 
             logging.error(
-                f"Error analyzing {symbol}: {e}"
+                f"{symbol} analysis error: {e}"
+            )
+
+    logging.info(
+        f"Scan finished. Signals found: {found}"
+    )
+
+    if target_chat:
+
+        if found == 0:
+
+            send_message(
+                target_chat,
+                "در این اسکن سیگنالی با امتیاز ۵۰ یا بیشتر پیدا نشد."
             )
 
 
-# ================= TELEGRAM COMMANDS =================
+# ==========================================
+# TELEGRAM COMMANDS
+# ==========================================
 
 def handle_command(chat_id, text):
 
-    if text.startswith("/start"):
+    command = text.split()[0].lower()
+
+    if command == "/start":
 
         subscribers.add(chat_id)
 
         send_message(
             chat_id,
             """
-🤖 <b>Toobit AI Market Scanner</b>
+🤖 <b>Toobit AI Scanner فعال شد</b>
 
-ربات تحلیل بازار فیوچرز فعال شد.
+✅ بررسی ۳۰ نماد برتر
+✅ تایم‌فریم 5m
+✅ تایم‌فریم 15m
+✅ تایم‌فریم 1h
+✅ تایم‌فریم 4h
 
-امکانات:
-
-✅ تحلیل 5m
-✅ تحلیل 15m
-✅ تحلیل 1h
-✅ تحلیل 4h
+✅ EMA / RSI / ATR
 ✅ Price Action
 ✅ Liquidity Sweep
 ✅ Break of Structure
-✅ RSI / EMA / ATR
-✅ Entry / SL / TP
 
-حداقل امتیاز سیگنال: 50
+⭐ حداقل امتیاز: 50
+
+⏱ اسکن خودکار هر ۵ دقیقه
 
 دستورات:
 
@@ -724,160 +960,150 @@ def handle_command(chat_id, text):
 /status - وضعیت ربات
 /help - راهنما
 
-ربات فقط هشدار می‌دهد و معامله باز نمی‌کند.
+ربات فقط هشدار می‌دهد و سفارش واقعی باز نمی‌کند.
 """
         )
 
-    elif text.startswith("/scan"):
+    elif command == "/scan":
 
         send_message(
             chat_id,
-            "🔍 در حال تحلیل بازار... لطفاً صبر کن."
+            "🔍 اسکن ۳۰ نماد برتر شروع شد..."
         )
 
-        signal = False
+        scan_market(target_chat=chat_id)
 
-        for symbol in SYMBOLS:
-
-            result = analyze_symbol(symbol)
-
-            if result:
-
-                send_message(
-                    chat_id,
-                    format_signal(result)
-                )
-
-                signal = True
-
-        if not signal:
-
-            send_message(
-                chat_id,
-                "فعلاً سیگنال معتبر با امتیاز 50 یا بیشتر پیدا نشد."
-            )
-
-    elif text.startswith("/status"):
+    elif command == "/status":
 
         send_message(
             chat_id,
             f"""
 🟢 ربات فعال است.
 
-Symbols: {len(SYMBOLS)}
+تعداد نمادها: {TOP_SYMBOLS}
 
-Timeframes: 5m / 15m / 1h / 4h
+تایم‌فریم‌ها: 5m / 15m / 1h / 4h
 
-Minimum Score: {MIN_SCORE}
+حداقل امتیاز: {MIN_SCORE}
 
-Scan Interval: {SCAN_INTERVAL} seconds
+فاصله اسکن: ۵ دقیقه
 
-Subscribers: {len(subscribers)}
+تعداد مشترکان فعلی: {len(subscribers)}
 """
         )
 
-    elif text.startswith("/help"):
+    elif command == "/help":
 
         send_message(
             chat_id,
             """
-/start - شروع ربات
-/scan - اسکن فوری بازار
+/start - فعال‌سازی دریافت سیگنال
+/scan - اسکن فوری
 /status - وضعیت ربات
 /help - راهنما
 """
         )
 
 
-# ================= POLLING =================
+# ==========================================
+# TELEGRAM POLLING
+# ==========================================
 
-def telegram_loop():
+def process_updates(offset):
 
-    offset = None
+    try:
 
-    while True:
+        params = {
+            "timeout": 1
+        }
 
-        try:
+        if offset is not None:
+            params["offset"] = offset
 
-            params = {
-                "timeout": 25
-            }
+        response = session.get(
+            f"{TG_URL}/getUpdates",
+            params=params,
+            timeout=5
+        ).json()
 
-            if offset is not None:
-                params["offset"] = offset
+        if not response.get("ok"):
+            return offset
 
-            response = session.get(
-                f"{TG_URL}/getUpdates",
-                params=params,
-                timeout=35
-            ).json()
+        for update in response.get("result", []):
 
-            if not response.get("ok"):
-                time.sleep(3)
+            offset = update["update_id"] + 1
+
+            message = update.get("message")
+
+            if not message:
                 continue
 
-            for update in response.get("result", []):
+            chat_id = message["chat"]["id"]
 
-                offset = update["update_id"] + 1
+            text = message.get("text", "")
 
-                message = update.get("message")
+            if text.startswith("/"):
 
-                if not message:
-                    continue
-
-                chat_id = message["chat"]["id"]
-
-                text = message.get("text", "")
-
-                if text:
+                try:
                     handle_command(chat_id, text)
 
-        except Exception as e:
+                except Exception as e:
 
-            logging.error(f"Polling error: {e}")
+                    logging.error(
+                        f"Command error: {e}"
+                    )
 
-            time.sleep(5)
+                    send_message(
+                        chat_id,
+                        "خطا در اجرای دستور. دوباره تلاش کن."
+                    )
+
+        return offset
+
+    except Exception as e:
+
+        logging.error(
+            f"Telegram polling error: {e}"
+        )
+
+        return offset
 
 
-# ================= MAIN =================
+# ==========================================
+# MAIN LOOP
+# ==========================================
 
 def main():
 
     if not TOKEN:
 
         raise RuntimeError(
-            "TELEGRAM_BOT_TOKEN is missing"
+            "TELEGRAM_BOT_TOKEN is missing in Railway Variables"
         )
 
     logging.info("Toobit AI Scanner started")
 
-    last_scan = 0
+    offset = None
+
+    next_scan = 0
 
     while True:
 
         try:
 
+            # دریافت پیام‌های تلگرام
+            offset = process_updates(offset)
+
+            # اسکن خودکار هر ۵ دقیقه
             now = time.time()
 
-            if now - last_scan >= SCAN_INTERVAL:
+            if now >= next_scan:
 
                 scan_market()
 
-                last_scan = time.time()
-
-            telegram_loop()
-
-        except KeyboardInterrupt:
-
-            break
+                next_scan = time.time() + SCAN_INTERVAL
 
         except Exception as e:
 
-            logging.error(f"Main error: {e}")
-
-            time.sleep(10)
-
-
-if __name__ == "__main__":
-
-    main()
+            logging.error(
+                f"Main loop err
