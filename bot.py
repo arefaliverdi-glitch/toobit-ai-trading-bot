@@ -763,7 +763,21 @@ def analyze_symbol(symbol):
 # ==========================================
 # SIGNAL MESSAGE
 # ==========================================
-
+def calculate_leverage(score):
+    if score < 70:
+        return 10
+    elif score < 75:
+        return 15
+    elif score < 80:
+        return 20
+    elif score < 85:
+        return 25
+    elif score < 90:
+        return 30
+    elif score < 95:
+        return 50
+    else:
+        return 100
 def format_signal(signal):
 
     emoji = (
@@ -771,7 +785,7 @@ def format_signal(signal):
         if signal["direction"] == "LONG"
         else "🔴"
     )
-
+    leverage = calculate_leverage(signal["score"])
     message = f"""
 {emoji} <b>TOOBIT FUTURES SIGNAL</b>
 
@@ -820,7 +834,7 @@ Patterns: {', '.join(data['patterns']) or 'None'}
 """
 
     message += """
-
+⚡ <b>Suggested Leverage:</b> {leverage}x
 ━━━━━━━━━━━━━━━━
 
 ⚠️ امتیاز، احتمال برد نیست.
