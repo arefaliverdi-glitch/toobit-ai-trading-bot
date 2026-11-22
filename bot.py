@@ -1068,7 +1068,6 @@ def process_updates(offset):
 
         return offset
 
-
 # ==========================================
 # MAIN LOOP
 # ==========================================
@@ -1076,7 +1075,6 @@ def process_updates(offset):
 def main():
 
     if not TOKEN:
-
         raise RuntimeError(
             "TELEGRAM_BOT_TOKEN is missing in Railway Variables"
         )
@@ -1084,20 +1082,21 @@ def main():
     logging.info("Toobit AI Scanner started")
 
     offset = None
-
     next_scan = 0
 
     while True:
 
         try:
 
-            # دریافت پیام‌های تلگرام
+            # دریافت پیام های تلگرام
             offset = process_updates(offset)
 
-            # اسکن خودکار هر ۵ دقیقه
+            # اسکن خودکار هر 5 دقیقه
             now = time.time()
 
             if now >= next_scan:
+
+                logging.info("Automatic market scan started")
 
                 scan_market()
 
@@ -1105,5 +1104,10 @@ def main():
 
         except Exception as e:
 
-            logging.error(
-                f"Main loop err
+            logging.error("Main loop error: %s", e)
+
+            time.sleep(5)
+
+
+if __name__ == "__main__":
+    main()
