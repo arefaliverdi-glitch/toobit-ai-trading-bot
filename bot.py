@@ -895,12 +895,18 @@ def scan_market(target_chat=None):
 
                 last_signals[key] = candle_time
 
-                for chat_id in list(subscribers):
+        for chat_id in list(subscribers):
+    try:
+        send_message(
+            chat_id,
+            format_signal(signal)
+        )
+        logging.info(f"Signal sent to subscriber: {chat_id}")
 
-                    send_message(
-                        chat_id,
-                        format_signal(signal)
-                    )
+    except Exception as e:
+        logging.error(
+            f"Failed to send signal to {chat_id}: {e}"
+            )
 
         except Exception as e:
 
