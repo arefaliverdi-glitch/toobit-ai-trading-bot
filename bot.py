@@ -112,10 +112,9 @@ def get_top_symbols():
         symbols_cache
         and now - last_symbol_refresh < SYMBOL_REFRESH
     ):
-
         return symbols_cache
 
-    logging.info("Refreshing top 30 symbols...")
+    logging.info("Refreshing top symbols...")
 
     exchange = api_get(
         f"{BASE_URL}/api/v1/exchangeInfo"
@@ -148,7 +147,6 @@ def get_top_symbols():
             and symbol.endswith("-USDT")
             and status == "TRADING"
         ):
-
             tradable.add(symbol)
 
     ranked = []
@@ -165,10 +163,7 @@ def get_top_symbols():
             volume = float(ticker.get("qv", 0))
 
             if volume > 0:
-
-                ranked.append(
-                    (symbol, volume)
-                )
+                ranked.append((symbol, volume))
 
         except (ValueError, TypeError):
             continue
@@ -178,10 +173,20 @@ def get_top_symbols():
         reverse=True
     )
 
-    new_symbols = [
-        item[0]
-        for item in ranked[:TOP_SYMBOLS]
+    ranked_symbols = [
+        item[0] for item in ranked
     ]
+
+    new_symbols = ranked_symbols[:TOP_SYMBOLS]
+
+    # اضافه کردن طلا و نقره حتی اگر جزو 100 نماد برتر نباشند
+    for symbol in ranked_symbols:
+
+        if (
+            ("XAU" in symbol or "XAG" in symbol)
+            and symbol not in new_symbols
+        ):
+            new_symbols.append(symbol)
 
     if new_symbols:
 
@@ -189,7 +194,7 @@ def get_top_symbols():
         last_symbol_refresh = now
 
     logging.info(
-        f"Selected {len(symbols_cache)} symbols"
+        f"Selected {len(symbols_cache)} symbols including metals"
     )
 
     return symbols_cache
