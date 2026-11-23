@@ -769,7 +769,7 @@ def analyze_symbol_modes(symbol):
     results = {}
 
     # دریافت و تحلیل تایم‌فریم‌ها
-    for tf in ["1m", "5m", "15m", "1h", "4h"]:
+    for tf in ["5m", "15m", "1h", "4h"]:
 
         candles = get_klines(symbol, tf)
 
