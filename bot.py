@@ -1000,7 +1000,7 @@ def scan_market(target_chat=None):
 
         logging.error("No symbols available")
 
-        if target_chat:
+        if target_chat is not None:
             send_message(
                 target_chat,
                 "خطا در دریافت فهرست نمادهای Toobit."
@@ -1018,50 +1018,59 @@ def scan_market(target_chat=None):
                 f"Scanning {index}/{len(symbols)}: {symbol}"
             )
 
-            signal = analyze_symbol(symbol)
+            signals = analyze_symbol_modes(symbol)
 
-            if not signal:
+            if not signals:
                 continue
 
-            found += 1
+            for signal in signals:
 
-            # سیگنال مربوط به آخرین کندل 5m
-            key = (
-                symbol,
-                signal["direction"]
-            )
+                signal_type = signal["type"]
+                direction = signal["direction"]
+                candle_time = signal["candle_time"]
 
-            candle_time = signal["candle_time"]
-
-            if target_chat is not None:
-
-                send_message(
-                    target_chat,
-                    format_signal(signal)
+                # جلوگیری از تکرار هر نوع سیگنال
+                key = (
+                    symbol,
+                    signal_type,
+                    direction
                 )
 
-            else:
+                if target_chat is not None:
 
-                if last_signals.get(key) == candle_time:
-                    continue
+                    send_message(
+                        target_chat,
+                        format_signal(signal)
+                    )
 
-                last_signals[key] = candle_time
+                    found += 1
 
-                for chat_id in list(subscribers):
-                    try:
-                        send_message(
-                            chat_id,
-                            format_signal(signal)
-                        )
+                else:
 
-                        logging.info(
-                            f"Signal sent to subscriber: {chat_id}"
-                        )
+                    if last_signals.get(key) == candle_time:
+                        continue
 
-                    except Exception as e:
-                        logging.error(
-                            f"Failed to send signal to {chat_id}: {e}"
-                        )
+                    for chat_id in list(subscribers):
+
+                        try:
+
+                            send_message(
+                                chat_id,
+                                format_signal(signal)
+                            )
+
+                            logging.info(
+                                f"{signal_type} signal sent to {chat_id}"
+                            )
+
+                        except Exception as e:
+
+                            logging.error(
+                                f"Failed to send signal to {chat_id}: {e}"
+                            )
+
+                    last_signals[key] = candle_time
+                    found += 1
 
         except Exception as e:
 
@@ -1070,16 +1079,16 @@ def scan_market(target_chat=None):
             )
 
     logging.info(
-        f"Scan finished. Signals found: {found}"
+        f"Scan finished. Signals sent: {found}"
     )
 
-    if target_chat:
+    if target_chat is not None:
 
         if found == 0:
 
             send_message(
                 target_chat,
-                "در این اسکن سیگنالی با امتیاز 70 یا بیشتر پیدا نشد."
+                "در این اسکن سیگنال جدیدی پیدا نشد."
             )
 
 
