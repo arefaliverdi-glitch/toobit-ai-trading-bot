@@ -783,25 +783,25 @@ def analyze_symbol_modes(symbol):
 
     signals = []
 
-    # -------------------------
+      # -------------------------
     # SCALP ANALYSIS
     # -------------------------
 
-          if "5m" in results and "15m" in results:
+    if "5m" in results and "15m" in results:
 
-              scalp_results = {
-                  "5m": results["5m"],
-                  "15m": results["15m"]
-              }
+        scalp_results = {
+            "5m": results["5m"],
+            "15m": results["15m"]
+        }
 
-              direction, score = calculate_score(
-                  scalp_results,
-                  mode="scalp"
-              )
+        direction, score = calculate_score(
+            scalp_results,
+            mode="scalp"
+        )
 
         if direction is not None:
 
-            data = scalp_results["1m"]
+            data = scalp_results["5m"]
 
             entry = data["price"]
             atr = data["atr"]
