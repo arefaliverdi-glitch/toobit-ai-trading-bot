@@ -21,7 +21,7 @@ TIMEFRAMES = {
     "4h": 4 * 60 * 60 * 1000
 }
 
-TOP_SYMBOLS = int(os.getenv("MAX_SYMBOLS", 150))
+TOP_SYMBOLS = int(os.getenv("MAX_SYMBOLS", 200))
 SCALP_MIN_SCORE = 70
 DAYTRADE_MIN_SCORE = 70
 
@@ -1139,7 +1139,7 @@ def handle_command(chat_id, text):
             """
 🤖 <b>Toobit AI Scanner فعال شد</b>
 
-✅ بررسی 150 نماد برتر
+✅ بررسی 200 نماد برتر
 ✅ تایم‌فریم 5m
 ✅ تایم‌فریم 15m
 ✅ تایم‌فریم 1h
