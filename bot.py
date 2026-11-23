@@ -762,6 +762,132 @@ def analyze_symbol(symbol):
 
     }
 
+def analyze_symbol_modes(symbol):
+
+    results = {}
+
+    # دریافت و تحلیل تایم‌فریم‌ها
+    for tf in ["1m", "5m", "15m", "1h", "4h"]:
+
+        candles = get_klines(symbol, tf)
+
+        if not candles:
+            continue
+
+        data = analyze_timeframe(candles)
+
+        if data:
+            results[tf] = data
+
+    signals = []
+
+    # -------------------------
+    # SCALP ANALYSIS
+    # -------------------------
+
+    if "1m" in results and "5m" in results:
+
+        scalp_results = {
+            "1m": results["1m"],
+            "5m": results["5m"]
+        }
+
+        direction, score = calculate_score(
+            scalp_results,
+            mode="scalp"
+        )
+
+        if direction is not None:
+
+            data = scalp_results["1m"]
+
+            entry = data["price"]
+            atr = data["atr"]
+
+            if atr > 0:
+
+                if direction == "LONG":
+                    sl = entry - atr * 1.5
+                    tp1 = entry + atr * 1.5
+                    tp2 = entry + atr * 2.5
+                    tp3 = entry + atr * 4
+
+                else:
+                    sl = entry + atr * 1.5
+                    tp1 = entry - atr * 1.5
+                    tp2 = entry - atr * 2.5
+                    tp3 = entry - atr * 4
+
+                signals.append({
+                    "symbol": symbol,
+                    "type": "SCALP",
+                    "direction": direction,
+                    "score": score,
+                    "entry": entry,
+                    "sl": sl,
+                    "tp1": tp1,
+                    "tp2": tp2,
+                    "tp3": tp3,
+                    "candle_time": data["candle_time"],
+                    "analysis": scalp_results
+                })
+
+    # -------------------------
+    # DAY TRADING ANALYSIS
+    # -------------------------
+
+    if all(
+        tf in results
+        for tf in ["15m", "1h", "4h"]
+    ):
+
+        day_results = {
+            "15m": results["15m"],
+            "1h": results["1h"],
+            "4h": results["4h"]
+        }
+
+        direction, score = calculate_score(
+            day_results,
+            mode="daytrade"
+        )
+
+        if direction is not None:
+
+            data = day_results["15m"]
+
+            entry = data["price"]
+            atr = data["atr"]
+
+            if atr > 0:
+
+                if direction == "LONG":
+                    sl = entry - atr * 1.5
+                    tp1 = entry + atr * 1.5
+                    tp2 = entry + atr * 2.5
+                    tp3 = entry + atr * 4
+
+                else:
+                    sl = entry + atr * 1.5
+                    tp1 = entry - atr * 1.5
+                    tp2 = entry - atr * 2.5
+                    tp3 = entry - atr * 4
+
+                signals.append({
+                    "symbol": symbol,
+                    "type": "DAY TRADING",
+                    "direction": direction,
+                    "score": score,
+                    "entry": entry,
+                    "sl": sl,
+                    "tp1": tp1,
+                    "tp2": tp2,
+                    "tp3": tp3,
+                    "candle_time": data["candle_time"],
+                    "analysis": day_results
+                })
+
+    return signals
 
 # ==========================================
 # SIGNAL MESSAGE
