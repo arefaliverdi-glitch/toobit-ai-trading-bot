@@ -591,8 +591,8 @@ def calculate_score(results, mode="daytrade"):
 
     if mode == "scalp":
 
-        trend_timeframes = ["5m"]
-        entry_tf = "1m"
+        trend_timeframes = ["15m"]
+        entry_tf = "5m"
         min_score = SCALP_MIN_SCORE
 
         trend_weight = 20
