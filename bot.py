@@ -15,7 +15,6 @@ BASE_URL = "https://api.toobit.com"
 TG_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 TIMEFRAMES = {
-    "1m": 1 * 60 * 1000,
     "5m": 5 * 60 * 1000,
     "15m": 15 * 60 * 1000,
     "1h": 60 * 60 * 1000,
@@ -26,7 +25,7 @@ TOP_SYMBOLS = 100
 SCALP_MIN_SCORE = 70
 DAYTRADE_MIN_SCORE = 70
 
-SCAN_INTERVAL = 60
+SCAN_INTERVAL = 120
 KLINE_LIMIT = 250
 SYMBOL_REFRESH = 1800
 
@@ -1188,13 +1187,13 @@ def handle_command(chat_id, text):
 
 تعداد نمادها: {TOP_SYMBOLS}
 
-تایم‌فریم‌ها: 1m / 5m / 15m / 1h / 4h
+تایم‌فریم‌ها: 5m / 15m / 1h / 4h
 
 حداقل امتیاز اسکالپ: {SCALP_MIN_SCORE}
 
 حداقل امتیاز دی‌ترید: {DAYTRADE_MIN_SCORE}
 
-فاصله اسکن: ۶۰ ثانیه
+فاصله اسکن: 120 ثانیه
 
 تعداد مشترکان فعلی: {len(subscribers)}
 """
