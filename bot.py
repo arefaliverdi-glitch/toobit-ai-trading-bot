@@ -1292,20 +1292,28 @@ def main():
             # دریافت پیام های تلگرام
             offset = process_updates(offset)
 
-            # اسکن خودکار هر 5 دقیقه
+            # بررسی زمان اسکن خودکار
             now = time.time()
 
             if now >= next_scan:
 
-                logging.info("Automatic market scan started")
+                logging.info(
+                    "Automatic market scan requested"
+                )
 
-                scan_market()
+                threading.Thread(
+                    target=run_scan_in_background,
+                    daemon=True
+                ).start()
 
-                next_scan = time.time() + SCAN_INTERVAL
+                next_scan = now + SCAN_INTERVAL
 
         except Exception as e:
 
-            logging.error("Main loop error: %s", e)
+            logging.error(
+                "Main loop error: %s",
+                e
+            )
 
             time.sleep(5)
 
