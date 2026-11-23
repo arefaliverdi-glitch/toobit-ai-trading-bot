@@ -14,6 +14,7 @@ BASE_URL = "https://api.toobit.com"
 TG_URL = f"https://api.telegram.org/bot{TOKEN}"
 
 TIMEFRAMES = {
+    "1m": 1 * 60 * 1000,
     "5m": 5 * 60 * 1000,
     "15m": 15 * 60 * 1000,
     "1h": 60 * 60 * 1000,
