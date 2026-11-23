@@ -25,7 +25,7 @@ TOP_SYMBOLS = int(os.getenv("MAX_SYMBOLS", 150))
 SCALP_MIN_SCORE = 70
 DAYTRADE_MIN_SCORE = 70
 
-SCAN_INTERVAL = 120
+SCAN_INTERVAL = 300
 KLINE_LIMIT = 250
 SYMBOL_REFRESH = 1800
 
@@ -1153,7 +1153,7 @@ def handle_command(chat_id, text):
 ⭐ حداقل امتیاز اسکالپ: 70
 ⭐ حداقل امتیاز دی‌ترید: 70
 
-⏱ اسکن خودکار هر 120 ثانیه
+⏱ اسکن خودکار هر 300 ثانیه
 
 دستورات:
 
@@ -1193,7 +1193,7 @@ def handle_command(chat_id, text):
 
 حداقل امتیاز دی‌ترید: {DAYTRADE_MIN_SCORE}
 
-فاصله اسکن: 120 ثانیه
+فاصله اسکن: 300 ثانیه
 
 تعداد مشترکان فعلی: {len(subscribers)}
 """
