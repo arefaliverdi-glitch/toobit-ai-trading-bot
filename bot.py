@@ -1167,12 +1167,16 @@ def handle_command(chat_id, text):
 
     elif command == "/scan":
 
-        send_message(
-            chat_id,
-            "🔍 اسکن 100 نماد برتر شروع شد..."
-        )
+    send_message(
+        chat_id,
+        "🔍 درخواست اسکن ثبت شد. در حال بررسی..."
+    )
 
-        scan_market(target_chat=chat_id)
+    threading.Thread(
+        target=run_scan_in_background,
+        kwargs={"target_chat": chat_id},
+        daemon=True
+    ).start()
 
     elif command == "/status":
 
