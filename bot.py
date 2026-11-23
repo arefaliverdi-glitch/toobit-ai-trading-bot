@@ -1141,6 +1141,7 @@ def handle_command(chat_id, text):
 🤖 <b>Toobit AI Scanner فعال شد</b>
 
 ✅ بررسی 100 نماد برتر
+✅ تایم‌فریم 1m
 ✅ تایم‌فریم 5m
 ✅ تایم‌فریم 15m
 ✅ تایم‌فریم 1h
@@ -1151,9 +1152,10 @@ def handle_command(chat_id, text):
 ✅ Liquidity Sweep
 ✅ Break of Structure
 
-⭐ حداقل امتیاز: 70
+⭐ حداقل امتیاز اسکالپ: 75
+⭐ حداقل امتیاز دی‌ترید: 70
 
-⏱ اسکن خودکار هر ۵ دقیقه
+⏱ اسکن خودکار هر ۶۰ ثانیه
 
 دستورات:
 
@@ -1167,16 +1169,16 @@ def handle_command(chat_id, text):
 
     elif command == "/scan":
 
-    send_message(
-        chat_id,
-        "🔍 درخواست اسکن ثبت شد. در حال بررسی..."
-    )
+        send_message(
+            chat_id,
+            "🔍 درخواست اسکن ثبت شد. در حال بررسی..."
+        )
 
-    threading.Thread(
-        target=run_scan_in_background,
-        kwargs={"target_chat": chat_id},
-        daemon=True
-    ).start()
+        threading.Thread(
+            target=run_scan_in_background,
+            kwargs={"target_chat": chat_id},
+            daemon=True
+        ).start()
 
     elif command == "/status":
 
@@ -1187,11 +1189,13 @@ def handle_command(chat_id, text):
 
 تعداد نمادها: {TOP_SYMBOLS}
 
-تایم‌فریم‌ها: 5m / 15m / 1h / 4h
+تایم‌فریم‌ها: 1m / 5m / 15m / 1h / 4h
 
-حداقل امتیاز: {MIN_SCORE}
+حداقل امتیاز اسکالپ: {SCALP_MIN_SCORE}
 
-فاصله اسکن: ۵ دقیقه
+حداقل امتیاز دی‌ترید: {DAYTRADE_MIN_SCORE}
+
+فاصله اسکن: ۶۰ ثانیه
 
 تعداد مشترکان فعلی: {len(subscribers)}
 """
