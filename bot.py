@@ -1092,7 +1092,36 @@ def scan_market(target_chat=None):
                 target_chat,
                 "در این اسکن سیگنال جدیدی پیدا نشد."
             )
+def run_scan_in_background(target_chat=None):
 
+    if not scan_lock.acquire(blocking=False):
+
+        logging.warning(
+            "Scan skipped: another scan is running"
+        )
+
+        if target_chat is not None:
+            send_message(
+                target_chat,
+                "یک اسکن دیگر در حال اجراست؛ کمی بعد دوباره تلاش کن."
+            )
+
+        return
+
+    try:
+
+        scan_market(target_chat=target_chat)
+
+    except Exception as e:
+
+        logging.error(
+            "Background scan error: %s",
+            e
+        )
+
+    finally:
+
+        scan_lock.release()
 
 # ==========================================
 # TELEGRAM COMMANDS
