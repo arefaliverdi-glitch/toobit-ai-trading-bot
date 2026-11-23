@@ -1141,7 +1141,6 @@ def handle_command(chat_id, text):
 🤖 <b>Toobit AI Scanner فعال شد</b>
 
 ✅ بررسی 100 نماد برتر
-✅ تایم‌فریم 1m
 ✅ تایم‌فریم 5m
 ✅ تایم‌فریم 15m
 ✅ تایم‌فریم 1h
@@ -1152,7 +1151,7 @@ def handle_command(chat_id, text):
 ✅ Liquidity Sweep
 ✅ Break of Structure
 
-⭐ حداقل امتیاز اسکالپ: 75
+⭐ حداقل امتیاز اسکالپ: 70
 ⭐ حداقل امتیاز دی‌ترید: 70
 
 ⏱ اسکن خودکار هر ۶۰ ثانیه
