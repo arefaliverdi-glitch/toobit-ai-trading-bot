@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import requests
+import threading
 from datetime import datetime, timezone
 
 # ==========================================
@@ -41,6 +42,7 @@ last_signals = {}
 
 symbols_cache = []
 last_symbol_refresh = 0
+scan_lock = threading.Lock()
 
 # ==========================================
 # HTTP
