@@ -914,17 +914,25 @@ def format_signal(signal):
         if signal["direction"] == "LONG"
         else "🔴"
     )
+
     leverage = calculate_leverage(signal["score"])
+
+    signal_type = signal.get("type", "DAY TRADING")
+
     message = f"""
 {emoji} <b>TOOBIT FUTURES SIGNAL</b>
 
 ━━━━━━━━━━━━━━━━
+
+📌 <b>Type:</b> {signal_type}
 
 💎 <b>Symbol:</b> {signal['symbol']}
 
 📊 <b>Direction:</b> {signal['direction']}
 
 ⭐ <b>Score:</b> {signal['score']}/100
+
+⚡ <b>Suggested Leverage:</b> {leverage}x
 
 ━━━━━━━━━━━━━━━━
 
@@ -963,10 +971,11 @@ Patterns: {', '.join(data['patterns']) or 'None'}
 """
 
     message += """
-⚡ <b>Suggested Leverage:</b> {leverage}x
+
 ━━━━━━━━━━━━━━━━
 
 ⚠️ امتیاز، احتمال برد نیست.
+اهرم پیشنهادی صرفاً نمایشی است.
 سطوح قیمتی تخمینی هستند.
 قبل از معامله، قیمت زنده، کارمزد،
 اسپرد و اسلیپیج را بررسی کن.
