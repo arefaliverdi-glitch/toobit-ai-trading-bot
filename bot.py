@@ -787,12 +787,12 @@ def analyze_symbol_modes(symbol):
     # SCALP ANALYSIS
     # -------------------------
 
-    if "1m" in results and "5m" in results:
+    if "5m" in results and "15m" in results:
 
-        scalp_results = {
-            "1m": results["1m"],
-            "5m": results["5m"]
-        }
+    scalp_results = {
+        "5m": results["5m"],
+        "15m": results["15m"]
+    }
 
         direction, score = calculate_score(
             scalp_results,
