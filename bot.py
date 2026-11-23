@@ -582,40 +582,50 @@ def analyze_timeframe(candles):
 # SCORING
 # ==========================================
 
-def calculate_score(results):
+def calculate_score(results, mode="daytrade"):
 
     long_score = 0
     short_score = 0
 
-    # 4H and 1H trend
+    if mode == "scalp":
 
-    for tf in ["4h", "1h"]:
+        trend_timeframes = ["5m"]
+        entry_tf = "1m"
+        min_score = SCALP_MIN_SCORE
+
+        trend_weight = 20
+        entry_trend_weight = 15
+
+    else:
+
+        trend_timeframes = ["4h", "1h"]
+        entry_tf = "15m"
+        min_score = DAYTRADE_MIN_SCORE
+
+        trend_weight = 15
+        entry_trend_weight = 10
+
+    # بررسی روند تایم‌فریم‌های بالاتر
+
+    for tf in trend_timeframes:
 
         data = results[tf]
 
         if data["trend"] == "BULLISH":
-            long_score += 15
+            long_score += trend_weight
 
         elif data["trend"] == "BEARISH":
-            short_score += 15
+            short_score += trend_weight
 
-    # 15m trend
+    # تحلیل تایم‌فریم ورود
 
-    if results["15m"]["trend"] == "BULLISH":
-        long_score += 10
-
-    elif results["15m"]["trend"] == "BEARISH":
-        short_score += 10
-
-    # 5m entry analysis
-
-    data = results["5m"]
+    data = results[entry_tf]
 
     if data["trend"] == "BULLISH":
-        long_score += 8
+        long_score += entry_trend_weight
 
     elif data["trend"] == "BEARISH":
-        short_score += 8
+        short_score += entry_trend_weight
 
     rsi = data["rsi"]
 
@@ -665,31 +675,16 @@ def calculate_score(results):
     if data["structure"] == "BEARISH_BOS":
         short_score += 12
 
-    long_score = max(
-        0, min(100, long_score)
-    )
+    long_score = max(0, min(100, long_score))
+    short_score = max(0, min(100, short_score))
 
-    short_score = max(
-        0, min(100, short_score)
-    )
-
-    if (
-        long_score >= MIN_SCORE
-        and long_score > short_score
-    ):
-
+    if long_score >= min_score and long_score > short_score:
         return "LONG", long_score
 
-    if (
-        short_score >= MIN_SCORE
-        and short_score > long_score
-    ):
-
+    if short_score >= min_score and short_score > long_score:
         return "SHORT", short_score
 
-    return None, max(
-        long_score, short_score
-    )
+    return None, max(long_score, short_score)
 
 
 # ==========================================
