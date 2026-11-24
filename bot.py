@@ -642,6 +642,69 @@ def calculate_score(results, mode="daytrade"):
     if rsi < 25:
         short_score -= 8
 
+ def calculate_score(results, mode="daytrade"):
+
+    long_score = 0
+    short_score = 0
+
+    if mode == "scalp":
+
+        trend_timeframes = ["15m"]
+        entry_tf = "5m"
+        min_score = SCALP_MIN_SCORE
+
+        trend_weight = 20
+        entry_trend_weight = 15
+
+    else:
+
+        trend_timeframes = ["4h", "1h"]
+        entry_tf = "15m"
+        min_score = DAYTRADE_MIN_SCORE
+
+        trend_weight = 15
+        entry_trend_weight = 10
+
+    # بررسی روند تایم‌فریم‌ها
+
+    for tf in trend_timeframes:
+
+        data = results[tf]
+
+        if data["trend"] == "BULLISH":
+            long_score += trend_weight
+
+        elif data["trend"] == "BEARISH":
+            short_score += trend_weight
+
+    # تحلیل تایم‌فریم ورود
+
+    data = results[entry_tf]
+
+    if data["trend"] == "BULLISH":
+        long_score += entry_trend_weight
+
+    elif data["trend"] == "BEARISH":
+        short_score += entry_trend_weight
+
+    # RSI
+
+    rsi = data["rsi"]
+
+    if 45 <= rsi <= 65:
+        long_score += 5
+
+    if 35 <= rsi <= 55:
+        short_score += 5
+
+    if rsi > 75:
+        long_score -= 8
+
+    if rsi < 25:
+        short_score -= 8
+
+    # Volume
+
     if data["volume_ratio"] >= 1.5:
 
         if data["price"] > data["ema20"]:
@@ -650,7 +713,9 @@ def calculate_score(results, mode="daytrade"):
         elif data["price"] < data["ema20"]:
             short_score += 8
 
-    patterns = data["patterns"]
+    # Candle patterns
+
+    patterns = data.get("patterns") or []
 
     if "BULLISH_ENGULFING" in patterns:
         long_score += 12
@@ -664,20 +729,32 @@ def calculate_score(results, mode="daytrade"):
     if "BEARISH_PINBAR" in patterns:
         short_score += 8
 
-    if data["liquidity"] == "BULLISH_SWEEP":
+    # Liquidity sweep
+
+    liquidity = data.get("liquidity")
+
+    if liquidity == "BULLISH_SWEEP":
         long_score += 15
 
-    if data["liquidity"] == "BEARISH_SWEEP":
+    elif liquidity == "BEARISH_SWEEP":
         short_score += 15
 
-    if data["structure"] == "BULLISH_BOS":
+    # Break of structure
+
+    structure = data.get("structure")
+
+    if structure == "BULLISH_BOS":
         long_score += 12
 
-    if data["structure"] == "BEARISH_BOS":
+    elif structure == "BEARISH_BOS":
         short_score += 12
+
+    # محدود کردن امتیازها
 
     long_score = max(0, min(100, long_score))
     short_score = max(0, min(100, short_score))
+
+    # تعیین جهت نهایی
 
     if long_score >= min_score and long_score > short_score:
         return "LONG", long_score
